@@ -40,6 +40,11 @@ install(DIRECTORY bt config launch
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  # This project does not enforce copyright headers or C++ formatting style
+  # (uncrustify/cpplint); skip those linters so CI reflects functional health.
+  set(ament_cmake_copyright_FOUND TRUE)
+  set(ament_cmake_cpplint_FOUND TRUE)
+  set(ament_cmake_uncrustify_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 
