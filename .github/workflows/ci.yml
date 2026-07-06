@@ -1,0 +1,77 @@
+name: build-and-test
+
+# Builds the whole ROS 2 Humble workspace and runs a headless Gazebo smoke test
+# in the cloud. No local ROS / Ubuntu install required -- runs on GitHub's
+# Ubuntu 22.04 runners inside the official ROS 2 Humble container. The sim runs
+# HEADLESS (gzserver only) using the CPU LiDAR, so no GPU is needed.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container:
+      image: osrf/ros:humble-desktop-full
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve dependencies (rosdep)
+        run: |
+          apt-get update
+          rosdep update
+          rosdep install --from-paths rover_ws/src --ignore-src -r -y
+
+      - name: Build workspace
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd rover_ws
+          colcon build --symlink-install --event-handlers console_direct+
+
+      - name: Run tests
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd rover_ws
+          colcon test --event-handlers console_direct+ --return-code-on-test-failure || true
+          colcon test-result --verbose
+
+      - name: URDF (xacro) parse check
+        run: |
+          source /opt/ros/humble/setup.bash
+          source rover_ws/install/setup.bash
+          xacro rover_ws/src/rover_description/urdf/rover.urdf.xacro > /tmp/rover.urdf
+          xacro rover_ws/src/rover_description/urdf/rover.urdf.xacro \
+            cmd_vel_topic:=/motor/cmd_vel publish_wheel_odom_tf:=false > /tmp/rover_hw.urdf
+          echo "URDF parses in both bare and hardware-bridge configurations."
+
+      - name: Headless Gazebo smoke test
+        run: |
+          source /opt/ros/humble/setup.bash
+          source rover_ws/install/setup.bash
+          export QT_QPA_PLATFORM=offscreen
+          # Launch sim + localization + terrain, headless, no RViz.
+          ros2 launch rover_gazebo sim.launch.py \
+            headless:=true rviz:=false localization:=true terrain:=true \
+            > /tmp/sim.log 2>&1 &
+          SIM_PID=$!
+          sleep 45
+          ros2 topic list | tee /tmp/topics.txt || true
+          echo "--- node list ---"; ros2 node list || true
+          # Hard gates: core sensor + odom streams must exist.
+          for t in /points /imu /odom /joint_states; do
+            grep -q "^${t}$" /tmp/topics.txt || { echo "MISSING topic ${t}"; cat /tmp/sim.log; kill $SIM_PID || true; exit 1; }
+          done
+          echo "Core topics present."
+          # Soft checks: derived outputs (may need a few more seconds to appear).
+          for t in /odometry/filtered/local /terrain/costmap; do
+            grep -q "^${t}$" /tmp/topics.txt && echo "OK ${t}" || echo "WARN ${t} not yet present"
+          done
+          kill $SIM_PID || true
+          sleep 3
+          pkill -f gzserver || true

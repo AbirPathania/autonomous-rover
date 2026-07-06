@@ -1,0 +1,30 @@
+# Mission definition and rules-of-engagement parameters.
+mission_server:
+  ros__parameters:
+    use_sim_time: true
+    global_frame: odom
+    initial_mode: Autonomous          # Standard | Autonomous | Ghost | EmergencyReturn | LostCommsAutonomous
+    threat_radius: 1.0                # half-size (m) of the keepout square around a threat
+    tick_rate_hz: 10.0
+
+    # Waypoints flattened as [x, y, yaw, x, y, yaw, ...] in the global frame.
+    # A patrol loop through the test terrain, avoiding the ramp/rock cluster.
+    waypoints:
+      - 5.0
+      - -2.0
+      - 0.0
+      - 8.0
+      - 0.0
+      - 1.57
+      - 5.0
+      - 2.5
+      - 3.14
+      - 0.0
+      - 0.0
+      - 0.0
+
+    # Return-to-home pose [x, y, yaw].
+    home:
+      - 0.0
+      - 0.0
+      - 0.0

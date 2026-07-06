@@ -1,0 +1,298 @@
+<?xml version="1.0"?>
+<!--
+  Six-wheel autonomous rover - main URDF description (xacro).
+  Coordinate convention (REP-103): x forward, y left, z up.
+
+  ROCKER-BOGIE passive suspension (JPL Mars-rover architecture):
+    Per side, one linkage of two arms joined at a pivot:
+      * ROCKER  - long arm, pivots on the body, carries the single REAR wheel,
+                  and carries the bogie pivot at its front end.
+      * BOGIE   - short beam pivoting on the rocker, carries the FRONT TWO wheels.
+    The pivots are passive revolute joints (no springs/dampers/actuators); the
+    geometry alone keeps all six wheels on the ground. Left and right rockers
+    would be coupled by a mechanical differential on the real rover; here they
+    are left as independent passive pivots (see NOTE below), which reproduces
+    the essential terrain-following behaviour for perception/GPR fidelity.
+
+  Sensor frames (lidar, imu, camera) are declared here; the Gazebo
+  plugins that make them "live" are in rover.gazebo.xacro.
+-->
+<robot name="rover" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================= -->
+  <!-- Parameters (edit these to match your CAD once hardware exists) -->
+  <!-- ============================================================= -->
+  <!-- Body. Mass tuned so all-up bare mass ~= 15.3 kg. -->
+  <xacro:property name="base_length" value="0.90"/>
+  <xacro:property name="base_width"  value="0.50"/>
+  <xacro:property name="base_height" value="0.20"/>
+  <xacro:property name="base_mass"   value="7.0"/>
+
+  <xacro:property name="wheel_radius" value="0.15"/>
+  <xacro:property name="wheel_width"  value="0.10"/>
+  <xacro:property name="wheel_mass"   value="0.6"/>
+
+  <!-- Rocker-bogie link masses -->
+  <xacro:property name="rocker_mass" value="1.2"/>
+  <xacro:property name="bogie_mass"  value="0.9"/>
+
+  <!-- Longitudinal wheel positions (x) in the base frame for the three axles -->
+  <xacro:property name="axle_front_x" value="0.30"/>
+  <xacro:property name="axle_mid_x"   value="0.0"/>
+  <xacro:property name="axle_rear_x"  value="-0.30"/>
+  <!-- Lateral offset of wheel centre from base centre (y) -->
+  <xacro:property name="wheel_y"      value="0.30"/>
+  <!-- Wheel centre height relative to base_link origin (z) -->
+  <xacro:property name="wheel_z"      value="0.0"/>
+
+  <!-- Rocker-bogie geometry -->
+  <!-- Lateral plane of the linkage beams (wheels sit 'wheel_out' outboard of it) -->
+  <xacro:property name="rocker_y"       value="0.26"/>
+  <xacro:property name="wheel_out"      value="0.04"/>
+  <!-- Height of the rocker/bogie pivots above the base_link origin -->
+  <xacro:property name="rocker_z"       value="0.10"/>
+  <!-- x of the bogie pivot in the base frame (between the mid and front axles) -->
+  <xacro:property name="bogie_pivot_x"  value="0.15"/>
+  <!-- Vertical drop from a pivot plane down to a wheel axle -->
+  <xacro:property name="wheel_drop"     value="${wheel_z - rocker_z}"/>
+  <!-- Passive pivot travel limit (rad) -->
+  <xacro:property name="pivot_limit"    value="0.6"/>
+
+  <xacro:property name="PI" value="3.1415926535897931"/>
+
+  <!-- ============================================================= -->
+  <!-- Inertia helper macros                                         -->
+  <!-- ============================================================= -->
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${(1.0/12.0)*m*(y*y + z*z)}" ixy="0.0" ixz="0.0"
+        iyy="${(1.0/12.0)*m*(x*x + z*z)}" iyz="0.0"
+        izz="${(1.0/12.0)*m*(x*x + y*y)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${(1.0/12.0)*m*(3*r*r + h*h)}" ixy="0.0" ixz="0.0"
+        iyy="${(1.0/12.0)*m*(3*r*r + h*h)}" iyz="0.0"
+        izz="${0.5*m*r*r}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ============================================================= -->
+  <!-- base_footprint -> base_link                                   -->
+  <!-- ============================================================= -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+      <material name="rover_body"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertia m="${base_mass}" x="${base_length}" y="${base_width}" z="${base_height}"/>
+  </link>
+
+  <!-- ============================================================= -->
+  <!-- Wheel macro                                                   -->
+  <!--   prefix : unique name, e.g. front_left                       -->
+  <!--   parent : link the wheel joint is mounted on                 -->
+  <!--   x,y,z  : wheel centre position relative to the parent frame -->
+  <!-- ============================================================= -->
+  <xacro:macro name="wheel" params="prefix parent x y z">
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="rover_wheel"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" h="${wheel_width}"/>
+    </link>
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${parent}"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="40.0" velocity="20.0"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ============================================================= -->
+  <!-- Rocker-bogie linkage macro (one per side)                     -->
+  <!--   side    : "left" / "right"                                  -->
+  <!--   reflect : +1 for left (+y), -1 for right (-y)               -->
+  <!--                                                               -->
+  <!-- base_link --(rocker_joint)--> rocker --(bogie_joint)--> bogie -->
+  <!--   rocker carries the REAR wheel; bogie carries FRONT + MID.   -->
+  <!-- ============================================================= -->
+  <xacro:macro name="rocker_bogie" params="side reflect">
+
+    <!-- Rocker arm: beam from the rear wheel (x=-0.30) to the bogie pivot (x=+0.15) -->
+    <link name="${side}_rocker_link">
+      <visual>
+        <origin xyz="${(axle_rear_x + bogie_pivot_x)/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${bogie_pivot_x - axle_rear_x} 0.05 0.05"/>
+        </geometry>
+        <material name="rover_body"/>
+      </visual>
+      <collision>
+        <origin xyz="${(axle_rear_x + bogie_pivot_x)/2} 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${bogie_pivot_x - axle_rear_x} 0.05 0.05"/>
+        </geometry>
+      </collision>
+      <xacro:box_inertia m="${rocker_mass}" x="${bogie_pivot_x - axle_rear_x}" y="0.05" z="0.05"/>
+    </link>
+
+    <!-- Rocker pivot on the body (passive revolute, y axis = pitch) -->
+    <joint name="${side}_rocker_joint" type="revolute">
+      <parent link="base_link"/>
+      <child link="${side}_rocker_link"/>
+      <origin xyz="0 ${reflect * rocker_y} ${rocker_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pivot_limit}" upper="${pivot_limit}" effort="200.0" velocity="10.0"/>
+      <dynamics damping="1.0" friction="0.5"/>
+    </joint>
+
+    <!-- Bogie beam: from the mid wheel (x=0) to the front wheel (x=+0.30) -->
+    <link name="${side}_bogie_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${axle_front_x - axle_mid_x} 0.05 0.05"/>
+        </geometry>
+        <material name="rover_body"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${axle_front_x - axle_mid_x} 0.05 0.05"/>
+        </geometry>
+      </collision>
+      <xacro:box_inertia m="${bogie_mass}" x="${axle_front_x - axle_mid_x}" y="0.05" z="0.05"/>
+    </link>
+
+    <!-- Bogie pivot on the front end of the rocker (passive revolute) -->
+    <joint name="${side}_bogie_joint" type="revolute">
+      <parent link="${side}_rocker_link"/>
+      <child link="${side}_bogie_link"/>
+      <origin xyz="${bogie_pivot_x} 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pivot_limit}" upper="${pivot_limit}" effort="200.0" velocity="10.0"/>
+      <dynamics damping="1.0" friction="0.5"/>
+    </joint>
+
+    <!-- Rear wheel on the rocker -->
+    <xacro:wheel prefix="rear_${side}" parent="${side}_rocker_link"
+                x="${axle_rear_x}" y="${reflect * wheel_out}" z="${wheel_drop}"/>
+
+    <!-- Front and mid wheels on the bogie (offsets are relative to the bogie pivot) -->
+    <xacro:wheel prefix="front_${side}" parent="${side}_bogie_link"
+                x="${axle_front_x - bogie_pivot_x}" y="${reflect * wheel_out}" z="${wheel_drop}"/>
+    <xacro:wheel prefix="mid_${side}" parent="${side}_bogie_link"
+                x="${axle_mid_x - bogie_pivot_x}" y="${reflect * wheel_out}" z="${wheel_drop}"/>
+
+  </xacro:macro>
+
+  <!-- Instantiate the two rocker-bogie sides -->
+  <xacro:rocker_bogie side="left"  reflect="1"/>
+  <xacro:rocker_bogie side="right" reflect="-1"/>
+
+  <!-- ============================================================= -->
+  <!-- Sensor mount frames                                           -->
+  <!-- ============================================================= -->
+  <!-- 3D LiDAR on a small mast at the front-top of the body -->
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+      <material name="rover_sensor"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+    </collision>
+    <xacro:cylinder_inertia m="0.3" r="0.05" h="0.07"/>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.30 0 ${base_height/2 + 0.10}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- IMU rigidly attached at the body centre of mass -->
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.03 0.01"/>
+      </geometry>
+      <material name="rover_sensor"/>
+    </visual>
+    <xacro:box_inertia m="0.05" x="0.03" y="0.03" z="0.01"/>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Forward-facing camera -->
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.10 0.03"/>
+      </geometry>
+      <material name="rover_sensor"/>
+    </visual>
+    <xacro:box_inertia m="0.1" x="0.03" y="0.10" z="0.03"/>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${base_length/2} 0 ${base_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Optical frame (REP-103: camera optical z-forward, x-right, y-down) -->
+  <link name="camera_optical_link"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_link"/>
+    <origin xyz="0 0 0" rpy="${-PI/2} 0 ${-PI/2}"/>
+  </joint>
+
+  <!-- Materials + Gazebo plugins -->
+  <xacro:include filename="$(find rover_description)/urdf/rover.gazebo.xacro"/>
+
+</robot>

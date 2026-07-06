@@ -1,0 +1,25 @@
+# Terrain assessment parameters.
+#
+# Drivability thresholds are tuned for the six-wheel rocker-bogie rover
+# (wheel radius 0.15 m; climbs obstacles up to ~1.2x wheel diameter). Slope and
+# step values below "warn" cost nothing; between "warn" and "lethal" they ramp
+# 0->100 so the planner pays a graded price; at/above "lethal" the cell is
+# marked 100 (impassable -> will tip / cannot climb).
+terrain_analysis_node:
+  ros__parameters:
+    cloud_topic: /points
+    map_frame: odom            # 'odom' works without SLAM; use 'map' with SLAM
+    robot_frame: base_footprint
+
+    resolution: 0.2            # metres per cell
+    size_m: 40.0              # square map side (metres)
+    range_max: 20.0           # ignore LiDAR points beyond this (metres)
+    min_points: 2             # a cell is UNKNOWN until it has this many points
+
+    slope_warn_deg: 12.0      # gentle grade -> cost starts rising
+    slope_lethal_deg: 28.0    # beyond this -> tip-over risk -> lethal
+
+    step_warn_m: 0.06         # small rubble -> cost starts rising
+    step_lethal_m: 0.22       # step too tall to climb safely -> lethal
+
+    publish_rate_hz: 4.0

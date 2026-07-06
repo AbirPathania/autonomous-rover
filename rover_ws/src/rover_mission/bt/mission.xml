@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+  Rover mission behaviour tree.
+
+  Top-level Fallback:
+    1. EmergencyReturn override  - if the mode is EmergencyReturn, abort and RTH.
+    2. Autonomous mission (ReactiveSequence, re-ticked every cycle so threats and
+       blind terrain are handled reactively while driving):
+         a. Threat handling: if a threat is detected -> Stop, Mark (keepout ->
+            Nav2 reroute), then clear the flag; otherwise pass through.
+         b. Blind terrain: if the terrain is blind -> LaunchDrone; otherwise pass.
+         c. Drive: get the active waypoint and NavigateToPose to it; when the
+            queue is exhausted, ReturnToHome.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Fallback name="root">
+
+      <Sequence name="emergency_return">
+        <IsMode mode="EmergencyReturn"/>
+        <ReturnToHome/>
+      </Sequence>
+
+      <ReactiveSequence name="autonomous_mission">
+
+        <Fallback name="threat_handling">
+          <Inverter>
+            <IsThreatDetected/>
+          </Inverter>
+          <Sequence name="stop_scan_mark_reroute">
+            <StopMotion/>
+            <MarkThreat/>
+            <ClearThreatFlag/>
+          </Sequence>
+        </Fallback>
+
+        <Fallback name="blind_terrain">
+          <Inverter>
+            <IsTerrainBlind/>
+          </Inverter>
+          <LaunchDrone/>
+        </Fallback>
+
+        <Fallback name="drive">
+          <Sequence name="follow_waypoint">
+            <GetNextWaypoint x="{gx}" y="{gy}" yaw="{gyaw}"/>
+            <NavigateToPose x="{gx}" y="{gy}" yaw="{gyaw}"/>
+            <ClearGoalFlag/>
+          </Sequence>
+          <ReturnToHome/>
+        </Fallback>
+
+      </ReactiveSequence>
+
+    </Fallback>
+  </BehaviorTree>
+</root>

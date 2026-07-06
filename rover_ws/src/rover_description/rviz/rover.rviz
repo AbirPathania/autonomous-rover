@@ -1,0 +1,155 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /RobotModel1
+        - /PointCloud21
+      Splitter Ratio: 0.5
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Name: Grid
+      Plane Cell Count: 20
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Name: RobotModel
+      Visual Enabled: true
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Name: PointCloud2
+      Size (m): 0.03
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /points
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Camera
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/image_raw
+      Value: true
+    - Alpha: 0.7
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Name: TerrainCostmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /terrain/costmap
+      Update Topic:
+        Value: /terrain/costmap_updates
+      Value: true
+    - Alpha: 0.5
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: true
+      Name: GlobalCostmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Line Style: Lines
+      Name: Plan
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /plan
+      Value: true
+    - Alpha: 0.6
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Name: KeepoutMask
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /keepout_filter_mask
+      Value: true
+    - Alpha: 0.7
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Name: ThreatConfidence
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /detection/confidence
+      Value: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 6
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Current View
+      Pitch: 0.4
+      Target Frame: base_link
+      Value: Orbit (rviz)
+      Yaw: 0.8
+Window Geometry:
+  Height: 800
+  Width: 1200
+  Hide Left Dock: false
+  Hide Right Dock: false

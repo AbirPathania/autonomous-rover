@@ -1,0 +1,12 @@
+safety_manager_node:
+  ros__parameters:
+    use_sim_time: true
+    cmd_in_topic: /cmd_vel          # high-level command from Nav2 / mission / teleop
+    cmd_out_topic: /cmd_vel_safe    # gated command -> hardware bridge
+    lidar_min_rate: 4.0             # below this -> DEGRADED (dead-reckoning)
+    imu_min_rate: 40.0              # below this -> SAFE_STOP (critical)
+    heartbeat_timeout: 0.5          # MCU heartbeat loss -> SAFE_STOP
+    stall_grace: 1.5                # commanded-but-not-moving grace (s)
+    stall_wheel_eps: 0.05           # wheel speed (rad/s) considered 'moving'
+    degraded_speed_scale: 0.5       # speed clamp while DEGRADED
+    control_rate: 20.0

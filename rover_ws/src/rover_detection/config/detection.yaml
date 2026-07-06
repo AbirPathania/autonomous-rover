@@ -1,0 +1,76 @@
+# Detection & fusion configuration.
+#
+# The ground-truth buried threats are known ONLY to the simulator and the
+# evaluator -- the processing/fusion nodes never see them. Threats are encoded as
+# parallel arrays (index-aligned). Positions are placed near the mission
+# waypoints so the rover drives over them.
+#
+# Types: metal_object (strong metal), chemical (VOC-emitting), buried_object
+# (radar-only, low metal/VOC -> hardest to confirm without false alarms).
+
+sensor_sim_node:
+  ros__parameters:
+    use_sim_time: true
+    map_frame: odom
+    robot_frame: base_footprint
+    rate_hz: 10.0
+    gpr_depth_bins: 64
+    gpr_max_depth: 1.0
+    gpr_swath: 0.6
+    metal_r0: 0.4
+    metal_range: 1.5
+    voc_sigma: 0.8
+    noise_gpr: 0.05
+    noise_metal: 0.03
+    noise_voc: 0.03
+    threat_x:    [4.0,  6.5,  5.0]
+    threat_y:    [-1.0, 1.0,  2.0]
+    threat_depth:[0.15, 0.25, 0.10]
+    threat_metal:[0.9,  0.1,  0.2]
+    threat_voc:  [0.1,  0.9,  0.05]
+    threat_size: [0.15, 0.12, 0.20]
+    threat_type: ["metal_object", "chemical", "buried_object"]
+
+gpr_processor_node:
+  ros__parameters:
+    use_sim_time: true
+    window_scans: 25
+    min_scan_spacing: 0.05
+    detect_threshold: 0.25
+    min_arm_bins: 2
+    emit_period: 0.5
+
+fusion_node:
+  ros__parameters:
+    use_sim_time: true
+    map_frame: odom
+    resolution: 0.25
+    size_m: 40.0
+    origin_x: -20.0
+    origin_y: -20.0
+    w_bias: -3.0
+    w_gpr: 4.0
+    w_metal: 4.5
+    w_voc: 3.0
+    confirm_confidence: 0.7
+    min_observations: 4
+    ema_alpha: 0.4
+    publish_period: 1.0
+    log_path: "~/rover_detections.jsonl"
+
+detection_eval_node:
+  ros__parameters:
+    use_sim_time: true
+    map_frame: odom
+    robot_frame: base_footprint
+    match_radius: 1.0
+    sensor_swath: 1.2
+    report_period: 5.0
+    # Same ground truth as the simulator (for scoring only).
+    threat_x:    [4.0,  6.5,  5.0]
+    threat_y:    [-1.0, 1.0,  2.0]
+    threat_depth:[0.15, 0.25, 0.10]
+    threat_metal:[0.9,  0.1,  0.2]
+    threat_voc:  [0.1,  0.9,  0.05]
+    threat_size: [0.15, 0.12, 0.20]
+    threat_type: ["metal_object", "chemical", "buried_object"]

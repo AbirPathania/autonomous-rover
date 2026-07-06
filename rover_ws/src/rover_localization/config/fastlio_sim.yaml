@@ -1,0 +1,63 @@
+# FAST-LIO2 configuration for the Gazebo simulated 3D LiDAR + IMU.
+#
+# FAST-LIO2 is an EXTERNAL package (Ericsii/FAST_LIO, the maintained ROS 2 fork,
+# or hku-mars/FAST_LIO -b ROS2). Clone and build it in the workspace first; see
+# docs/setup.md, "FAST-LIO2". This file is passed to its mapping node.
+#
+# NOTE: this is in ROS 2 parameter-file format ("/**: ros__parameters:"), so the
+# nested keys become dotted parameters (e.g. preprocess.lidar_type) exactly as
+# the ROS 2 node declares them. The "/**" wildcard matches the node name.
+#
+# IMPORTANT sim caveat: the Gazebo ray-sensor PointCloud2 does NOT carry the
+# per-point "ring" and "time" fields that FAST-LIO2's velodyne/ouster front-ends
+# use for motion de-skew. We therefore run with de-skew effectively disabled
+# (point_filter_num: 1, feature_extract_enable: false). On real
+# Velodyne/Ouster/Livox hardware, switch to the native driver and re-enable it.
+
+/**:
+  ros__parameters:
+    feature_extract_enable: false
+    point_filter_num: 1
+    max_iteration: 4
+    filter_size_surf: 0.5
+    filter_size_map: 0.5
+    cube_side_length: 1000.0
+    runtime_pos_log_enable: false
+
+    common:
+      lid_topic: "/points"
+      imu_topic: "/imu"
+      time_sync_en: false        # sim clocks already share /clock (use_sim_time)
+      time_offset_lidar_to_imu: 0.0
+
+    preprocess:
+      lidar_type: 2              # 1=Livox 2=Velodyne 3=Ouster (generic XYZ ~= 2)
+      scan_line: 16              # matches rover.gazebo.xacro vertical samples
+      scan_rate: 10              # Hz, matches the sim LiDAR update_rate
+      timestamp_unit: 3          # 0=s 1=ms 2=us 3=ns (ignored when no time field)
+      blind: 0.5                 # ignore returns closer than this (m)
+
+    mapping:
+      acc_cov: 0.1
+      gyr_cov: 0.1
+      b_acc_cov: 0.0001
+      b_gyr_cov: 0.0001
+      fov_degree: 360.0
+      det_range: 50.0            # matches sim LiDAR max range
+      extrinsic_est_en: false
+      # LiDAR (lidar_link) relative to IMU (imu_link at base_link origin):
+      # 0.30 m forward, base_height/2 + 0.10 = 0.20 m up.
+      extrinsic_T: [0.30, 0.0, 0.20]
+      extrinsic_R: [1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0]
+
+    publish:
+      path_en: true
+      scan_publish_en: true
+      dense_publish_en: false
+      scan_bodyframe_pub_en: false
+
+    pcd_save:
+      pcd_save_en: false
+      interval: -1

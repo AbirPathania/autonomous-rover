@@ -1,0 +1,30 @@
+{
+  "name": "rover-ros2-humble",
+  "image": "osrf/ros:humble-desktop-full",
+  "features": {
+    // Optional lightweight web desktop (noVNC) so you can open the actual
+    // Gazebo / RViz windows in a browser tab. Reachable on forwarded port 6080.
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "rover",
+      "webPort": "6080",
+      "vncPort": "5901"
+    }
+  },
+  "forwardPorts": [6080, 8765],
+  "portsAttributes": {
+    "6080": { "label": "noVNC desktop (Gazebo/RViz)" },
+    "8765": { "label": "Foxglove bridge" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteUser": "root",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-iot.vscode-ros",
+        "ms-python.python",
+        "ms-vscode.cpptools",
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
+}
