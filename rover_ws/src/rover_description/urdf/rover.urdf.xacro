@@ -149,8 +149,7 @@
   <!-- Rocker-bogie linkage macro (one per side)                     -->
   <!--   side    : "left" / "right"                                  -->
   <!--   reflect : +1 for left (+y), -1 for right (-y)               -->
-  <!--                                                               -->
-  <!-- base_link --(rocker_joint)--> rocker --(bogie_joint)--> bogie -->
+  <!--   Chain: base_link (rocker_joint) rocker (bogie_joint) bogie  -->
   <!--   rocker carries the REAR wheel; bogie carries FRONT + MID.   -->
   <!-- ============================================================= -->
   <xacro:macro name="rocker_bogie" params="side reflect">
