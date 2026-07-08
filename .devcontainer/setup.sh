@@ -10,14 +10,22 @@ echo "==> Installing dependencies"
 apt-get update
 # Foxglove bridge lets you visualise topics/TF/pointclouds/costmaps in the
 # Foxglove web app (https://app.foxglove.dev) with the sim running headless.
+# diagnostic-updater is a runtime dep of robot_localization's ekf_node that the
+# base image can miss; install it explicitly so the EKF starts reliably.
 apt-get install -y \
   python3-colcon-common-extensions \
   ros-humble-foxglove-bridge \
-  ros-humble-teleop-twist-keyboard
+  ros-humble-teleop-twist-keyboard \
+  ros-humble-diagnostic-updater \
+  ros-humble-robot-localization \
+  ros-humble-navigation2 \
+  ros-humble-nav2-bringup
 
 source /opt/ros/humble/setup.bash
 rosdep update
-rosdep install --from-paths "${WS}/src" --ignore-src -r -y || true
+# Report (but do not silently swallow) any unresolved dependencies.
+rosdep install --from-paths "${WS}/src" --ignore-src -r -y || \
+  echo "WARNING: rosdep reported unresolved dependencies (see above)."
 
 echo "==> Building workspace"
 cd "${WS}"
