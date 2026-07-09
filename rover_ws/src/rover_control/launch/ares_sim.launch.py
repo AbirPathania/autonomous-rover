@@ -67,11 +67,13 @@ def generate_launch_description():
              f'controllers_file:={controllers_file}',
              f'enable_cameras:={cameras}']).decode('utf-8')
         # gazebo_ros2_control forwards robot_description to the controller_manager
-        # as a CLI --param override; the leading <?xml ...?> prolog breaks that
-        # parser, so strip it before robot_state_publisher advertises it.
-        lines = urdf.splitlines()
-        if lines and lines[0].lstrip().startswith('<?xml'):
-            urdf = '\n'.join(lines[1:])
+        # as a CLI --param override; a leading <?xml ...?> prolog (or leading
+        # comment/whitespace) breaks rcl's argument parser and the
+        # controller_manager never starts. Slice from the <robot> tag so the
+        # value the plugin forwards begins cleanly.
+        idx = urdf.find('<robot')
+        if idx > 0:
+            urdf = urdf[idx:]
         return [Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
