@@ -9,15 +9,16 @@ loads the wheel/steering/marker controllers, and starts the 4WS kinematics node
 that maps /cmd_vel onto them and publishes wheel odometry.
 """
 import os
+import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
-                            RegisterEventHandler)
+                            OpaqueFunction, RegisterEventHandler)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -59,19 +60,26 @@ def generate_launch_description():
     terrain_map_frame = PythonExpression(
         ["'map' if '", slam, "' == 'true' else 'odom'"])
 
-    robot_description = ParameterValue(
-        Command(['xacro ', xacro_file,
-                ' controllers_file:=', controllers_file,
-                ' enable_cameras:=', LaunchConfiguration('cameras')]),
-        value_type=str)
+    def _robot_state_publisher(context):
+        cameras = LaunchConfiguration('cameras').perform(context)
+        urdf = subprocess.check_output(
+            ['xacro', xacro_file,
+             f'controllers_file:={controllers_file}',
+             f'enable_cameras:={cameras}']).decode('utf-8')
+        # gazebo_ros2_control forwards robot_description to the controller_manager
+        # as a CLI --param override; the leading <?xml ...?> prolog breaks that
+        # parser, so strip it before robot_state_publisher advertises it.
+        lines = urdf.splitlines()
+        if lines and lines[0].lstrip().startswith('<?xml'):
+            urdf = '\n'.join(lines[1:])
+        return [Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            output='screen',
+            parameters=[{'robot_description': urdf, 'use_sim_time': True}],
+        )]
 
-    robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        output='screen',
-        parameters=[{'robot_description': robot_description,
-                    'use_sim_time': True}],
-    )
+    robot_state_publisher = OpaqueFunction(function=_robot_state_publisher)
 
     gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
