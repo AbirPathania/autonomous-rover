@@ -14,12 +14,14 @@ terrain_analysis_node:
     resolution: 0.2            # metres per cell
     size_m: 40.0              # square map side (metres)
     range_max: 20.0           # ignore LiDAR points beyond this (metres)
-    min_points: 2             # a cell is UNKNOWN until it has this many points
+    min_points: 3             # a cell is UNKNOWN until it has this many points
 
-    slope_warn_deg: 12.0      # gentle grade -> cost starts rising
-    slope_lethal_deg: 28.0    # beyond this -> tip-over risk -> lethal
+    # Thresholds calmed so flat ground + the drivable ramp (~11.5 deg) read as
+    # FREE; only genuinely steep faces / tall steps become costly or lethal.
+    slope_warn_deg: 20.0      # gentle grade -> cost starts rising (ramp stays free)
+    slope_lethal_deg: 38.0    # beyond this -> tip-over risk -> lethal
 
-    step_warn_m: 0.06         # small rubble -> cost starts rising
-    step_lethal_m: 0.22       # step too tall to climb safely -> lethal
+    step_warn_m: 0.12         # small rubble/LiDAR noise ignored below this
+    step_lethal_m: 0.30       # step too tall to climb safely -> lethal
 
     publish_rate_hz: 4.0

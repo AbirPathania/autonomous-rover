@@ -100,38 +100,45 @@ controller_server:
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: true
-      min_vel_x: -0.3
-      max_vel_x: 0.8
+      # Tuned for smooth 6-wheel skid-steer motion: forward-only path following
+      # (no reverse weaving), moderate speed, responsive accel, fine yaw sampling.
+      min_vel_x: 0.0
+      max_vel_x: 0.5
       min_vel_y: 0.0
       max_vel_y: 0.0
       max_vel_theta: 1.0
       min_speed_xy: 0.0
-      max_speed_xy: 0.8
+      max_speed_xy: 0.5
       min_speed_theta: 0.0
-      acc_lim_x: 1.5
-      acc_lim_theta: 2.0
-      decel_lim_x: -1.5
-      decel_lim_theta: -2.0
+      acc_lim_x: 2.5
+      acc_lim_theta: 3.2
+      decel_lim_x: -2.5
+      decel_lim_theta: -3.2
       vx_samples: 20
-      vtheta_samples: 20
+      vtheta_samples: 40
       sim_time: 1.7
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
       xy_goal_tolerance: 0.25
       trans_stopped_velocity: 0.25
+      short_circuit_trajectory_evaluation: true
+      stateful: true
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign",
                 "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
+      BaseObstacle.scale: 0.05
+      PathAlign.scale: 34.0
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
+      GoalAlign.scale: 12.0
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
+      PathDist.scale: 34.0
+      GoalDist.scale: 20.0
       RotateToGoal.scale: 32.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
+      Oscillation.scale: 8.0
+      Oscillation.oscillation_reset_dist: 0.1
+      Oscillation.oscillation_reset_angle: 0.2
 
 # ------------------------------------------------------------------ #
 planner_server:
@@ -172,8 +179,8 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.35
 
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
@@ -206,8 +213,8 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.35
 
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
