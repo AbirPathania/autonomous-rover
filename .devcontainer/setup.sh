@@ -19,7 +19,14 @@ apt-get install -y \
   ros-humble-diagnostic-updater \
   ros-humble-robot-localization \
   ros-humble-navigation2 \
-  ros-humble-nav2-bringup
+  ros-humble-nav2-bringup \
+  ros-humble-ros2-control \
+  ros-humble-ros2-controllers \
+  ros-humble-gazebo-ros2-control \
+  ros-humble-controller-manager \
+  ros-humble-joint-state-broadcaster \
+  ros-humble-velocity-controllers \
+  ros-humble-position-controllers
 
 source /opt/ros/humble/setup.bash
 rosdep update

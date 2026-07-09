@@ -1,0 +1,373 @@
+<?xml version="1.0"?>
+<!--
+  ARES-G ground rover - dimensionally accurate model per ARES Technical
+  Architecture L0.3 (Patroclus Systems). This is the FAITHFUL model; the working
+  tuned baseline lives in rover.urdf.xacro and is intentionally left untouched.
+
+  Fidelity to the doc:
+    * Geometry (L0.3 3.2.4): 620 x 350 x 310 mm, wheelbase 420 mm,
+      track 280 mm (centre-centre), ground clearance 80 mm.
+    * Wheels (3.1.6): 200-240 mm dia -> 220 mm here (radius 0.11 m).
+    * Mass (3.2.3): all-up ~17.2 kg, distributed across links below.
+    * Mobility (3.1.1): six-wheel passive rocker-bogie (two front wheels on the
+      bogie, single rear wheel on the rocker, per side).
+    * Steering (3.1.2): FOUR STEERED STATIONS as real revolute kingpin joints -
+      two rear wheels steer individually, two front bogies steer as rigid units
+      about a shared kingpin. Position-actuated via ros2_control and driven by
+      the four-wheel-steering kinematics node (rover_control), with a skid-steer
+      fallback for in-place turns (as the doc retains).
+    * Marker arm (6.5): 2-DOF, 0.40 m reach, paint-canister tip.
+    * Sensors (6.1): Livox Mid-360-class 360x59 deg LiDAR, forward stereo
+      (D455-class), side + rear stereo (D435i-class), VN-200-class IMU.
+  Coordinate convention: REP-103 (x fwd, y left, z up).
+-->
+<robot name="ares_g" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ===================== Parameters (L0.3 spec) ===================== -->
+  <xacro:property name="base_length" value="0.62"/>   <!-- 620 mm -->
+  <xacro:property name="base_width"  value="0.35"/>   <!-- 350 mm -->
+  <xacro:property name="base_height" value="0.16"/>   <!-- hull height -->
+  <xacro:property name="ground_clearance" value="0.08"/>  <!-- 80 mm -->
+  <xacro:property name="base_mass"   value="10.6"/>   <!-- hull+SEB+battery+detection+comms -->
+
+  <xacro:property name="wheel_radius" value="0.11"/>  <!-- 220 mm dia -->
+  <xacro:property name="wheel_width"  value="0.08"/>
+  <xacro:property name="wheel_mass"   value="0.4"/>
+  <xacro:property name="rocker_mass"  value="1.2"/>
+  <xacro:property name="bogie_mass"   value="0.9"/>
+
+  <!-- Longitudinal axle positions: wheelbase (front->rear) = 0.42 m -->
+  <xacro:property name="axle_front_x" value="0.21"/>
+  <xacro:property name="axle_mid_x"   value="0.0"/>
+  <xacro:property name="axle_rear_x"  value="-0.21"/>
+  <!-- Track 280 mm centre-centre -> half = 0.14 -->
+  <xacro:property name="wheel_y"      value="0.14"/>
+  <xacro:property name="wheel_z"      value="0.0"/>
+
+  <!-- Rocker-bogie geometry -->
+  <xacro:property name="rocker_y"       value="0.12"/>
+  <xacro:property name="wheel_out"      value="0.02"/>
+  <xacro:property name="rocker_z"       value="0.07"/>
+  <xacro:property name="bogie_pivot_x"  value="0.105"/>
+  <xacro:property name="wheel_drop"     value="${wheel_z - rocker_z}"/>
+  <xacro:property name="pivot_limit"    value="0.6"/>
+  <xacro:property name="steer_limit"    value="0.6"/>   <!-- kingpin travel (rad) -->
+
+  <xacro:property name="PI" value="3.1415926535897931"/>
+
+  <!-- ===================== Inertia macros ===================== -->
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${(1.0/12.0)*m*(y*y + z*z)}" ixy="0.0" ixz="0.0"
+        iyy="${(1.0/12.0)*m*(x*x + z*z)}" iyz="0.0"
+        izz="${(1.0/12.0)*m*(x*x + y*y)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${(1.0/12.0)*m*(3*r*r + h*h)}" ixy="0.0" ixz="0.0"
+        iyy="${(1.0/12.0)*m*(3*r*r + h*h)}" iyz="0.0"
+        izz="${0.5*m*r*r}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ===================== base ===================== -->
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <!-- Hull sits from ground_clearance to ground_clearance+base_height;
+         its centre is (ground_clearance + base_height/2 - wheel_radius) above base_link. -->
+    <visual>
+      <origin xyz="0 0 ${ground_clearance + base_height/2 - wheel_radius}" rpy="0 0 0"/>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+      <material name="ares_hull"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${ground_clearance + base_height/2 - wheel_radius}" rpy="0 0 0"/>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+    </collision>
+    <xacro:box_inertia m="${base_mass}" x="${base_length}" y="${base_width}" z="${base_height}"/>
+  </link>
+
+  <!-- ===================== Wheel macro ===================== -->
+  <xacro:macro name="wheel" params="prefix parent x y z">
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="ares_wheel"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" h="${wheel_width}"/>
+    </link>
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${parent}"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="40.0" velocity="20.0"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Small steering knuckle link (kingpin) -->
+  <xacro:macro name="knuckle" params="name">
+    <link name="${name}">
+      <visual>
+        <geometry><cylinder radius="0.02" length="0.04"/></geometry>
+        <material name="ares_steer"/>
+      </visual>
+      <xacro:cylinder_inertia m="0.05" r="0.02" h="0.04"/>
+    </link>
+  </xacro:macro>
+
+  <!-- ===================== Rocker-bogie + four-station steering ===================== -->
+  <!--   side="left"/"right", reflect=+1/-1 for +y/-y -->
+  <xacro:macro name="rocker_bogie" params="side reflect">
+
+    <!-- Rocker arm (passive pitch pivot on the body) -->
+    <link name="${side}_rocker_link">
+      <visual>
+        <origin xyz="${(axle_rear_x + bogie_pivot_x)/2} 0 0" rpy="0 0 0"/>
+        <geometry><box size="${bogie_pivot_x - axle_rear_x} 0.04 0.04"/></geometry>
+        <material name="ares_link"/>
+      </visual>
+      <collision>
+        <origin xyz="${(axle_rear_x + bogie_pivot_x)/2} 0 0" rpy="0 0 0"/>
+        <geometry><box size="${bogie_pivot_x - axle_rear_x} 0.04 0.04"/></geometry>
+      </collision>
+      <xacro:box_inertia m="${rocker_mass}" x="${bogie_pivot_x - axle_rear_x}" y="0.04" z="0.04"/>
+    </link>
+    <joint name="${side}_rocker_joint" type="revolute">
+      <parent link="base_link"/>
+      <child link="${side}_rocker_link"/>
+      <origin xyz="0 ${reflect * rocker_y} ${rocker_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pivot_limit}" upper="${pivot_limit}" effort="200.0" velocity="10.0"/>
+      <dynamics damping="1.0" friction="0.5"/>
+    </joint>
+
+    <!-- Bogie: passive pitch pivot on the rocker, then a kingpin steer joint -->
+    <link name="${side}_bogie_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><box size="${axle_front_x - axle_mid_x} 0.04 0.04"/></geometry>
+        <material name="ares_link"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><box size="${axle_front_x - axle_mid_x} 0.04 0.04"/></geometry>
+      </collision>
+      <xacro:box_inertia m="${bogie_mass}" x="${axle_front_x - axle_mid_x}" y="0.04" z="0.04"/>
+    </link>
+    <!-- passive bogie pitch pivot -->
+    <xacro:knuckle name="${side}_bogie_carrier"/>
+    <joint name="${side}_bogie_joint" type="revolute">
+      <parent link="${side}_rocker_link"/>
+      <child link="${side}_bogie_carrier"/>
+      <origin xyz="${bogie_pivot_x} 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pivot_limit}" upper="${pivot_limit}" effort="200.0" velocity="10.0"/>
+      <dynamics damping="1.0" friction="0.5"/>
+    </joint>
+    <!-- STEERED STATION #1/#2: front bogie kingpin (both bogie wheels yaw together).
+         Real revolute kingpin, position-actuated by ros2_control + the
+         four-wheel-steering kinematics node (skid-steer is the fallback mode). -->
+    <joint name="${side}_bogie_steer_joint" type="revolute">
+      <parent link="${side}_bogie_carrier"/>
+      <child link="${side}_bogie_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-steer_limit}" upper="${steer_limit}" effort="30.0" velocity="3.0"/>
+      <dynamics damping="0.3" friction="0.2"/>
+    </joint>
+
+    <!-- Front + mid wheels ride on the (steered) bogie -->
+    <xacro:wheel prefix="front_${side}" parent="${side}_bogie_link"
+                x="${axle_front_x - bogie_pivot_x}" y="${reflect * wheel_out}" z="${wheel_drop}"/>
+    <xacro:wheel prefix="mid_${side}" parent="${side}_bogie_link"
+                x="${axle_mid_x - bogie_pivot_x}" y="${reflect * wheel_out}" z="${wheel_drop}"/>
+
+    <!-- STEERED STATION #3/#4: rear wheel kingpin (individually steered).
+         Real revolute kingpin, position-actuated (see note above). -->
+    <xacro:knuckle name="${side}_rear_knuckle"/>
+    <joint name="${side}_rear_steer_joint" type="revolute">
+      <parent link="${side}_rocker_link"/>
+      <child link="${side}_rear_knuckle"/>
+      <origin xyz="${axle_rear_x} ${reflect * wheel_out} ${wheel_drop}" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-steer_limit}" upper="${steer_limit}" effort="30.0" velocity="3.0"/>
+      <dynamics damping="0.3" friction="0.2"/>
+    </joint>
+    <xacro:wheel prefix="rear_${side}" parent="${side}_rear_knuckle"
+                x="0" y="0" z="0"/>
+
+  </xacro:macro>
+
+  <xacro:rocker_bogie side="left"  reflect="1"/>
+  <xacro:rocker_bogie side="right" reflect="-1"/>
+
+  <!-- ===================== Sensor mounts (L0.3 6.1) ===================== -->
+  <!-- Sensor mast: LiDAR (Livox Mid-360 class) on top-front -->
+  <link name="lidar_link">
+    <visual>
+      <geometry><cylinder radius="0.045" length="0.06"/></geometry>
+      <material name="ares_sensor"/>
+    </visual>
+    <collision><geometry><cylinder radius="0.045" length="0.06"/></geometry></collision>
+    <xacro:cylinder_inertia m="0.3" r="0.045" h="0.06"/>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.22 0 ${ground_clearance + base_height - wheel_radius + 0.10}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- IMU (VN-200 class) at the body centre -->
+  <link name="imu_link">
+    <visual><geometry><box size="0.03 0.03 0.01"/></geometry><material name="ares_sensor"/></visual>
+    <xacro:box_inertia m="0.05" x="0.03" y="0.03" z="0.01"/>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/><child link="imu_link"/>
+    <origin xyz="0 0 ${ground_clearance + base_height/2 - wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Forward stereo (RealSense D455 class) -->
+  <xacro:macro name="cam" params="name x y z yaw">
+    <link name="${name}_link">
+      <visual><geometry><box size="0.025 0.09 0.025"/></geometry><material name="ares_sensor"/></visual>
+      <xacro:box_inertia m="0.07" x="0.025" y="0.09" z="0.025"/>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="base_link"/><child link="${name}_link"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 ${yaw}"/>
+    </joint>
+    <link name="${name}_optical_link"/>
+    <joint name="${name}_optical_joint" type="fixed">
+      <parent link="${name}_link"/><child link="${name}_optical_link"/>
+      <origin xyz="0 0 0" rpy="${-PI/2} 0 ${-PI/2}"/>
+    </joint>
+  </xacro:macro>
+  <xacro:cam name="front_cam" x="${base_length/2}" y="0"    z="${ground_clearance + base_height*0.6 - wheel_radius}" yaw="0"/>
+  <xacro:cam name="left_cam"  x="0" y="${base_width/2}"  z="${ground_clearance + base_height*0.6 - wheel_radius}" yaw="${PI/2}"/>
+  <xacro:cam name="rear_cam"  x="${-base_length/2}" y="0" z="${ground_clearance + base_height*0.6 - wheel_radius}" yaw="${PI}"/>
+
+  <!-- ===================== Marker arm (L0.3 6.5): 2-DOF, 0.40 m reach ===================== -->
+  <link name="marker_base_link">
+    <visual><geometry><cylinder radius="0.025" length="0.05"/></geometry><material name="ares_link"/></visual>
+    <xacro:cylinder_inertia m="0.1" r="0.025" h="0.05"/>
+  </link>
+  <joint name="marker_base_joint" type="fixed">
+    <parent link="base_link"/><child link="marker_base_link"/>
+    <origin xyz="${base_length/2 - 0.03} 0 ${ground_clearance + base_height - wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Shoulder: pitch -->
+  <link name="marker_link1">
+    <visual><origin xyz="0.11 0 0" rpy="0 ${PI/2} 0"/>
+      <geometry><cylinder radius="0.012" length="0.22"/></geometry><material name="ares_link"/></visual>
+    <xacro:cylinder_inertia m="0.15" r="0.012" h="0.22"/>
+  </link>
+  <joint name="marker_shoulder_joint" type="revolute">
+    <parent link="marker_base_link"/><child link="marker_link1"/>
+    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10.0" velocity="2.0"/>
+    <dynamics damping="0.2" friction="0.1"/>
+  </joint>
+
+  <!-- Elbow: pitch, ends in the paint-canister tip -->
+  <link name="marker_link2">
+    <visual><origin xyz="0.09 0 0" rpy="0 ${PI/2} 0"/>
+      <geometry><cylinder radius="0.010" length="0.18"/></geometry><material name="ares_link"/></visual>
+    <visual><origin xyz="0.18 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.02" length="0.05"/></geometry><material name="ares_marker"/></visual>
+    <xacro:cylinder_inertia m="0.15" r="0.010" h="0.18"/>
+  </link>
+  <joint name="marker_elbow_joint" type="revolute">
+    <parent link="marker_link1"/><child link="marker_link2"/>
+    <origin xyz="0.22 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10.0" velocity="2.0"/>
+    <dynamics damping="0.2" friction="0.1"/>
+  </joint>
+
+  <!-- ===================== ros2_control (genuine actuation) ===================== -->
+  <!-- Six drive wheels (velocity) + four steered kingpins (position) + the
+       2-DOF marker arm (position). gazebo_ros2_control loads the controllers
+       named in ares_controllers.yaml. -->
+  <xacro:arg name="controllers_file"
+             default="$(find rover_control)/config/ares_controllers.yaml"/>
+
+  <xacro:macro name="wheel_ctrl" params="name">
+    <joint name="${name}">
+      <command_interface name="velocity">
+        <param name="min">-20.0</param>
+        <param name="max">20.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="steer_ctrl" params="name">
+    <joint name="${name}">
+      <command_interface name="position">
+        <param name="min">${-steer_limit}</param>
+        <param name="max">${steer_limit}</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <ros2_control name="AresGazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <xacro:wheel_ctrl name="front_left_wheel_joint"/>
+    <xacro:wheel_ctrl name="front_right_wheel_joint"/>
+    <xacro:wheel_ctrl name="mid_left_wheel_joint"/>
+    <xacro:wheel_ctrl name="mid_right_wheel_joint"/>
+    <xacro:wheel_ctrl name="rear_left_wheel_joint"/>
+    <xacro:wheel_ctrl name="rear_right_wheel_joint"/>
+    <xacro:steer_ctrl name="left_bogie_steer_joint"/>
+    <xacro:steer_ctrl name="right_bogie_steer_joint"/>
+    <xacro:steer_ctrl name="left_rear_steer_joint"/>
+    <xacro:steer_ctrl name="right_rear_steer_joint"/>
+    <joint name="marker_shoulder_joint">
+      <command_interface name="position">
+        <param name="min">${-PI/2}</param>
+        <param name="max">${PI/2}</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="marker_elbow_joint">
+      <command_interface name="position">
+        <param name="min">${-PI/2}</param>
+        <param name="max">${PI/2}</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Materials + Gazebo plugins -->
+  <xacro:include filename="$(find rover_description)/urdf/ares_g.gazebo.xacro"/>
+
+</robot>

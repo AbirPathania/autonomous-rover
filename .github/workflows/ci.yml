@@ -50,6 +50,7 @@ jobs:
           xacro rover_ws/src/rover_description/urdf/rover.urdf.xacro > /tmp/rover.urdf
           xacro rover_ws/src/rover_description/urdf/rover.urdf.xacro \
             cmd_vel_topic:=/motor/cmd_vel publish_wheel_odom_tf:=false > /tmp/rover_hw.urdf
+          xacro rover_ws/src/rover_description/urdf/ares_g.urdf.xacro > /tmp/ares_g.urdf
           echo "URDF parses in both bare and hardware-bridge configurations."
 
       - name: Headless Gazebo smoke test
@@ -74,6 +75,37 @@ jobs:
           for t in /odometry/filtered/local /terrain/costmap; do
             grep -q "^${t}$" /tmp/topics.txt && echo "OK ${t}" || echo "WARN ${t} not yet present"
           done
+          kill $SIM_PID || true
+          sleep 3
+          pkill -f gzserver || true
+
+      - name: Headless ARES-G smoke test (four-wheel-steering + ros2_control)
+        run: |
+          source /opt/ros/humble/setup.bash
+          source rover_ws/install/setup.bash
+          export QT_QPA_PLATFORM=offscreen
+          ros2 launch rover_control ares_sim.launch.py \
+            headless:=true rviz:=false \
+            > /tmp/ares.log 2>&1 &
+          SIM_PID=$!
+          sleep 55
+          ros2 topic list | tee /tmp/ares_topics.txt || true
+          echo "--- controllers ---"; ros2 control list_controllers || true
+          echo "--- nodes ---"; ros2 node list || true
+          # Hard gates: sensors, odom, and the actuation command topics.
+          for t in /points /imu /odom /joint_states \
+                   /wheel_velocity_controller/commands \
+                   /steering_position_controller/commands; do
+            grep -q "^${t}$" /tmp/ares_topics.txt || { echo "MISSING topic ${t}"; cat /tmp/ares.log; kill $SIM_PID || true; exit 1; }
+          done
+          echo "ARES-G core + actuation topics present."
+          # Drive it briefly and confirm odom moves (steering actually works).
+          ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
+            '{linear: {x: 0.4}, angular: {z: 0.3}}' > /dev/null 2>&1 &
+          PUB_PID=$!
+          sleep 8
+          kill $PUB_PID || true
+          ros2 topic echo --once /odom nav_msgs/msg/Odometry | head -n 20 || true
           kill $SIM_PID || true
           sleep 3
           pkill -f gzserver || true
