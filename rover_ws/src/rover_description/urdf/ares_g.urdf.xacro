@@ -335,6 +335,16 @@
     </joint>
   </xacro:macro>
 
+  <!-- Passive (un-actuated) pivots: state-only so joint_state_broadcaster
+       publishes them and robot_state_publisher can build the articulated TF
+       tree (avoids a separate joint_state_publisher plugin). -->
+  <xacro:macro name="passive_ctrl" params="name">
+    <joint name="${name}">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
   <ros2_control name="AresGazeboSystem" type="system">
     <hardware>
       <plugin>gazebo_ros2_control/GazeboSystem</plugin>
@@ -349,6 +359,10 @@
     <xacro:steer_ctrl name="right_bogie_steer_joint"/>
     <xacro:steer_ctrl name="left_rear_steer_joint"/>
     <xacro:steer_ctrl name="right_rear_steer_joint"/>
+    <xacro:passive_ctrl name="left_rocker_joint"/>
+    <xacro:passive_ctrl name="right_rocker_joint"/>
+    <xacro:passive_ctrl name="left_bogie_joint"/>
+    <xacro:passive_ctrl name="right_bogie_joint"/>
     <joint name="marker_shoulder_joint">
       <command_interface name="position">
         <param name="min">${-PI/2}</param>

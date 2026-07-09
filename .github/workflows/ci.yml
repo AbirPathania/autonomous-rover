@@ -85,7 +85,7 @@ jobs:
           source rover_ws/install/setup.bash
           export QT_QPA_PLATFORM=offscreen
           ros2 launch rover_control ares_sim.launch.py \
-            headless:=true rviz:=false \
+            headless:=true rviz:=false cameras:=false \
             > /tmp/ares.log 2>&1 &
           SIM_PID=$!
           sleep 55

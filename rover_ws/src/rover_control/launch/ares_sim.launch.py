@@ -41,6 +41,10 @@ def generate_launch_description():
     localization_arg = DeclareLaunchArgument('localization', default_value='false')
     slam_arg = DeclareLaunchArgument('slam', default_value='false')
     terrain_arg = DeclareLaunchArgument('terrain', default_value='false')
+    cameras_arg = DeclareLaunchArgument(
+        'cameras', default_value='true',
+        description='Enable the RGB/depth cameras. Set false for headless '
+                    'gzserver on GPU-less hosts (Codespaces) to avoid a crash.')
     x_arg = DeclareLaunchArgument('x', default_value='0.0')
     y_arg = DeclareLaunchArgument('y', default_value='0.0')
     z_arg = DeclareLaunchArgument('z', default_value='0.25')
@@ -56,7 +60,9 @@ def generate_launch_description():
         ["'map' if '", slam, "' == 'true' else 'odom'"])
 
     robot_description = ParameterValue(
-        Command(['xacro ', xacro_file, ' controllers_file:=', controllers_file]),
+        Command(['xacro ', xacro_file,
+                ' controllers_file:=', controllers_file,
+                ' enable_cameras:=', LaunchConfiguration('cameras')]),
         value_type=str)
 
     robot_state_publisher = Node(
@@ -125,7 +131,8 @@ def generate_launch_description():
     kinematics = Node(
         package='rover_control', executable='ares_kinematics_node',
         output='screen',
-        parameters=[{'use_sim_time': True, 'publish_tf': publish_tf}],
+        parameters=[{'use_sim_time': True,
+                    'publish_tf': ParameterValue(publish_tf, value_type=bool)}],
     )
     marker_arm = Node(
         package='rover_control', executable='marker_arm_node',
@@ -154,7 +161,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         world_arg, rviz_arg, headless_arg, localization_arg, slam_arg,
-        terrain_arg, x_arg, y_arg, z_arg,
+        terrain_arg, cameras_arg, x_arg, y_arg, z_arg,
         robot_state_publisher,
         gzserver, gzclient,
         spawn_rover,
