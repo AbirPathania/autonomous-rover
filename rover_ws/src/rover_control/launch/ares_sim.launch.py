@@ -1,24 +1,22 @@
 """ARES-G full simulation bring-up (genuine four-wheel-steering model).
 
     ros2 launch rover_control ares_sim.launch.py
-    ros2 launch rover_control ares_sim.launch.py headless:=true rviz:=false
+    ros2 launch rover_control ares_sim.launch.py headless:=true rviz:=false cameras:=false
     ros2 launch rover_control ares_sim.launch.py localization:=true terrain:=true
 
-Brings up Gazebo + the dimensionally-accurate ARES-G rover (ros2_control),
-loads the wheel/steering/marker controllers, and starts the 4WS kinematics node
-that maps /cmd_vel onto them and publishes wheel odometry.
+Brings up Gazebo + the dimensionally-accurate ARES-G rover. The wheels are
+driven by the gazebo_ros diff-drive plugin (robust motion + /odom); the four
+steered kingpins and the marker arm are actuated by the joint_pose_trajectory
+plugin, commanded by the 4WS steering node from /cmd_vel.
 """
 import os
-import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
-                            OpaqueFunction, RegisterEventHandler)
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
-from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -27,12 +25,10 @@ def generate_launch_description():
     desc_share = get_package_share_directory('rover_description')
     gazebo_share = get_package_share_directory('rover_gazebo')
     gazebo_ros_share = get_package_share_directory('gazebo_ros')
-    ctrl_share = get_package_share_directory('rover_control')
     loc_share = get_package_share_directory('rover_localization')
     terrain_share = get_package_share_directory('rover_terrain')
 
     xacro_file = os.path.join(desc_share, 'urdf', 'ares_g.urdf.xacro')
-    controllers_file = os.path.join(ctrl_share, 'config', 'ares_controllers.yaml')
     default_world = os.path.join(gazebo_share, 'worlds', 'test_terrain.world')
     rviz_config = os.path.join(desc_share, 'rviz', 'rover.rviz')
 
@@ -53,35 +49,26 @@ def generate_launch_description():
     localization = LaunchConfiguration('localization')
     slam = LaunchConfiguration('slam')
 
-    # When the EKF owns odom->base_footprint, the kinematics node must not also
-    # publish that TF (it still publishes /odom for the EKF to consume).
-    publish_tf = PythonExpression(
+    # When the EKF stack runs it owns odom->base_footprint, so diff-drive must
+    # not also publish that TF.
+    publish_wheel_odom_tf = PythonExpression(
         ["'false' if '", localization, "' == 'true' else 'true'"])
     terrain_map_frame = PythonExpression(
         ["'map' if '", slam, "' == 'true' else 'odom'"])
 
-    def _robot_state_publisher(context):
-        cameras = LaunchConfiguration('cameras').perform(context)
-        urdf = subprocess.check_output(
-            ['xacro', xacro_file,
-             f'controllers_file:={controllers_file}',
-             f'enable_cameras:={cameras}']).decode('utf-8')
-        # gazebo_ros2_control forwards robot_description to the controller_manager
-        # as a CLI --param override; a leading <?xml ...?> prolog (or leading
-        # comment/whitespace) breaks rcl's argument parser and the
-        # controller_manager never starts. Slice from the <robot> tag so the
-        # value the plugin forwards begins cleanly.
-        idx = urdf.find('<robot')
-        if idx > 0:
-            urdf = urdf[idx:]
-        return [Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            output='screen',
-            parameters=[{'robot_description': urdf, 'use_sim_time': True}],
-        )]
+    robot_description = ParameterValue(
+        Command(['xacro ', xacro_file,
+                ' publish_wheel_odom_tf:=', publish_wheel_odom_tf,
+                ' enable_cameras:=', LaunchConfiguration('cameras')]),
+        value_type=str)
 
-    robot_state_publisher = OpaqueFunction(function=_robot_state_publisher)
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        output='screen',
+        parameters=[{'robot_description': robot_description,
+                    'use_sim_time': True}],
+    )
 
     gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -105,45 +92,12 @@ def generate_launch_description():
         output='screen',
     )
 
-    # --- ros2_control spawners (chained so they load in a deterministic order) ---
-    jsb_spawner = Node(
-        package='controller_manager', executable='spawner',
-        arguments=['joint_state_broadcaster',
-                '--controller-manager', '/controller_manager'],
-        output='screen',
-    )
-    wheel_spawner = Node(
-        package='controller_manager', executable='spawner',
-        arguments=['wheel_velocity_controller',
-                '--controller-manager', '/controller_manager'],
-        output='screen',
-    )
-    steer_spawner = Node(
-        package='controller_manager', executable='spawner',
-        arguments=['steering_position_controller',
-                '--controller-manager', '/controller_manager'],
-        output='screen',
-    )
-    marker_spawner = Node(
-        package='controller_manager', executable='spawner',
-        arguments=['marker_position_controller',
-                '--controller-manager', '/controller_manager'],
-        output='screen',
-    )
-
-    # Load joint_state_broadcaster after the entity spawns, then the rest.
-    after_spawn = RegisterEventHandler(
-        OnProcessExit(target_action=spawn_rover, on_exit=[jsb_spawner]))
-    after_jsb = RegisterEventHandler(
-        OnProcessExit(target_action=jsb_spawner,
-                    on_exit=[wheel_spawner, steer_spawner, marker_spawner]))
-
-    kinematics = Node(
+    # Four-station steering commander (/cmd_vel -> kingpin JointTrajectory).
+    steering = Node(
         package='rover_control', executable='ares_kinematics_node',
-        output='screen',
-        parameters=[{'use_sim_time': True,
-                    'publish_tf': ParameterValue(publish_tf, value_type=bool)}],
+        output='screen', parameters=[{'use_sim_time': True}],
     )
+    # Marker arm (Bool /marker/deploy -> marker JointTrajectory).
     marker_arm = Node(
         package='rover_control', executable='marker_arm_node',
         output='screen', parameters=[{'use_sim_time': True}],
@@ -175,8 +129,7 @@ def generate_launch_description():
         robot_state_publisher,
         gzserver, gzclient,
         spawn_rover,
-        after_spawn, after_jsb,
-        kinematics, marker_arm,
+        steering, marker_arm,
         rviz,
         localization_stack, terrain_stack,
     ])

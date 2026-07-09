@@ -13,9 +13,9 @@
       bogie, single rear wheel on the rocker, per side).
     * Steering (3.1.2): FOUR STEERED STATIONS as real revolute kingpin joints -
       two rear wheels steer individually, two front bogies steer as rigid units
-      about a shared kingpin. Position-actuated via ros2_control and driven by
-      the four-wheel-steering kinematics node (rover_control), with a skid-steer
-      fallback for in-place turns (as the doc retains).
+      about a shared kingpin. Position-actuated via the joint_pose_trajectory
+      plugin, driven by the four-wheel-steering node (rover_control), with a
+      skid-steer fallback for in-place turns (as the doc retains).
     * Marker arm (6.5): 2-DOF, 0.40 m reach, paint-canister tip.
     * Sensors (6.1): Livox Mid-360-class 360x59 deg LiDAR, forward stereo
       (D455-class), side + rear stereo (D435i-class), VN-200-class IMU.
@@ -184,8 +184,8 @@
       <dynamics damping="1.0" friction="0.5"/>
     </joint>
     <!-- STEERED STATION #1/#2: front bogie kingpin (both bogie wheels yaw together).
-         Real revolute kingpin, position-actuated by ros2_control + the
-         four-wheel-steering kinematics node (skid-steer is the fallback mode). -->
+         Real revolute kingpin, position-actuated by the joint_pose_trajectory
+         plugin + the four-wheel-steering node (skid-steer is the fallback). -->
     <joint name="${side}_bogie_steer_joint" type="revolute">
       <parent link="${side}_bogie_carrier"/>
       <child link="${side}_bogie_link"/>
@@ -306,82 +306,15 @@
     <dynamics damping="0.2" friction="0.1"/>
   </joint>
 
-  <!-- ===================== ros2_control (genuine actuation) ===================== -->
-  <!-- Six drive wheels (velocity) + four steered kingpins (position) + the
-       2-DOF marker arm (position). gazebo_ros2_control loads the controllers
-       named in ares_controllers.yaml. -->
-  <xacro:arg name="controllers_file"
-             default="$(find rover_control)/config/ares_controllers.yaml"/>
+  <!-- ===================== Drive/actuation args ===================== -->
+  <!-- When true, the diff-drive plugin publishes odom->base_footprint (fine for
+       the bare sim); set false when robot_localization owns that TF. -->
+  <xacro:arg name="publish_wheel_odom_tf" default="true"/>
+  <!-- Motor command topic the diff-drive plugin obeys (cmd_vel for the bare sim;
+       /motor/cmd_vel when the safety+HW-bridge stack drives the motors). -->
+  <xacro:arg name="cmd_vel_topic" default="cmd_vel"/>
 
-  <xacro:macro name="wheel_ctrl" params="name">
-    <joint name="${name}">
-      <command_interface name="velocity">
-        <param name="min">-20.0</param>
-        <param name="max">20.0</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </xacro:macro>
-
-  <xacro:macro name="steer_ctrl" params="name">
-    <joint name="${name}">
-      <command_interface name="position">
-        <param name="min">${-steer_limit}</param>
-        <param name="max">${steer_limit}</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </xacro:macro>
-
-  <!-- Passive (un-actuated) pivots: state-only so joint_state_broadcaster
-       publishes them and robot_state_publisher can build the articulated TF
-       tree (avoids a separate joint_state_publisher plugin). -->
-  <xacro:macro name="passive_ctrl" params="name">
-    <joint name="${name}">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </xacro:macro>
-
-  <ros2_control name="AresGazeboSystem" type="system">
-    <hardware>
-      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-    </hardware>
-    <xacro:wheel_ctrl name="front_left_wheel_joint"/>
-    <xacro:wheel_ctrl name="front_right_wheel_joint"/>
-    <xacro:wheel_ctrl name="mid_left_wheel_joint"/>
-    <xacro:wheel_ctrl name="mid_right_wheel_joint"/>
-    <xacro:wheel_ctrl name="rear_left_wheel_joint"/>
-    <xacro:wheel_ctrl name="rear_right_wheel_joint"/>
-    <xacro:steer_ctrl name="left_bogie_steer_joint"/>
-    <xacro:steer_ctrl name="right_bogie_steer_joint"/>
-    <xacro:steer_ctrl name="left_rear_steer_joint"/>
-    <xacro:steer_ctrl name="right_rear_steer_joint"/>
-    <xacro:passive_ctrl name="left_rocker_joint"/>
-    <xacro:passive_ctrl name="right_rocker_joint"/>
-    <xacro:passive_ctrl name="left_bogie_joint"/>
-    <xacro:passive_ctrl name="right_bogie_joint"/>
-    <joint name="marker_shoulder_joint">
-      <command_interface name="position">
-        <param name="min">${-PI/2}</param>
-        <param name="max">${PI/2}</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-    <joint name="marker_elbow_joint">
-      <command_interface name="position">
-        <param name="min">${-PI/2}</param>
-        <param name="max">${PI/2}</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </ros2_control>
-
-  <!-- Materials + Gazebo plugins -->
+  <!-- Materials + Gazebo plugins (drive, steering, sensors) -->
   <xacro:include filename="$(find rover_description)/urdf/ares_g.gazebo.xacro"/>
 
 </robot>

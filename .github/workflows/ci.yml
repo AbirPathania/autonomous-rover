@@ -90,16 +90,13 @@ jobs:
           SIM_PID=$!
           sleep 55
           ros2 topic list | tee /tmp/ares_topics.txt || true
-          echo "--- controllers ---"; ros2 control list_controllers || true
           echo "--- nodes ---"; ros2 node list || true
-          # Hard gates: sensors, odom, and the actuation command topics.
-          for t in /points /imu /odom /joint_states \
-                   /wheel_velocity_controller/commands \
-                   /steering_position_controller/commands; do
+          # Hard gates: sensors, odom, joint states, and the steering command topic.
+          for t in /points /imu /odom /joint_states /set_joint_trajectory; do
             grep -q "^${t}$" /tmp/ares_topics.txt || { echo "MISSING topic ${t}"; cat /tmp/ares.log; kill $SIM_PID || true; exit 1; }
           done
-          echo "ARES-G core + actuation topics present."
-          # Drive it briefly and confirm odom moves (steering actually works).
+          echo "ARES-G core + steering topics present."
+          # Drive it briefly and confirm odom moves (drive + steering work).
           ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
             '{linear: {x: 0.4}, angular: {z: 0.3}}' > /dev/null 2>&1 &
           PUB_PID=$!

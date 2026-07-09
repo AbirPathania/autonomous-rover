@@ -3,10 +3,10 @@
 <package format="3">
   <name>rover_control</name>
   <version>0.0.1</version>
-  <description>ARES-G low-level control: gazebo_ros2_control controllers plus a
-    four-wheel-steering kinematics node that maps /cmd_vel onto the six wheel
-    velocity commands and four kingpin position commands (Ackermann-style with a
-    skid-steer fallback) and publishes wheel odometry.</description>
+  <description>ARES-G low-level control: a four-wheel-steering node that maps
+    /cmd_vel onto the four kingpins (via the gazebo_ros joint_pose_trajectory
+    plugin, Ackermann with a skid-steer fallback) plus a 2-DOF marker-arm
+    node. The six wheels are driven by the gazebo_ros diff-drive plugin.</description>
   <maintainer email="you@example.com">abipathania</maintainer>
   <license>Apache-2.0</license>
 
@@ -18,15 +18,11 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf_transformations</exec_depend>
 
-  <!-- ros2_control stack (loaded by gazebo_ros2_control) -->
-  <exec_depend>controller_manager</exec_depend>
-  <exec_depend>joint_state_broadcaster</exec_depend>
-  <exec_depend>velocity_controllers</exec_depend>
-  <exec_depend>position_controllers</exec_depend>
-  <exec_depend>gazebo_ros2_control</exec_depend>
+  <!-- Gazebo drive/steering/sensor plugins -->
   <exec_depend>gazebo_ros</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rover_description</exec_depend>

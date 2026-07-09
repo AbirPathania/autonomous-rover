@@ -18,7 +18,7 @@ setup(
     zip_safe=True,
     maintainer='abipathania',
     maintainer_email='you@example.com',
-    description='ARES-G four-wheel-steering kinematics + ros2_control controllers.',
+    description='ARES-G four-wheel-steering commander + marker-arm node.',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
