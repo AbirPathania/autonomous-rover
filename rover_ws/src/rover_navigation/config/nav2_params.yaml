@@ -126,7 +126,7 @@ controller_server:
       stateful: true
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign",
                 "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.05
+      BaseObstacle.scale: 0.3
       PathAlign.scale: 34.0
       PathAlign.forward_point_distance: 0.1
       GoalAlign.scale: 12.0
@@ -179,8 +179,8 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5
-        inflation_radius: 0.35
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.45
 
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
@@ -213,8 +213,8 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5
-        inflation_radius: 0.35
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.45
 
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
