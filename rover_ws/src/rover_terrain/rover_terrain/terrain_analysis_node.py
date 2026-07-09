@@ -121,11 +121,19 @@ class TerrainAnalysisNode(Node):
             f'({self.size_m} m) in frame "{self.map_frame}".')
 
     # ------------------------------------------------------------------ #
-    def _lookup(self, target, source, stamp):
-        """Return (R, t) transforming points from source frame to target frame."""
+    def _lookup(self, target, source, stamp=None):
+        """Return (R, t) transforming points from source frame to target frame.
+
+        Uses the LATEST available transform (Time()) rather than the cloud's exact
+        stamp. Under sim time the exact-stamp transform is frequently not yet in
+        the buffer ("timestamp earlier than transform cache"), which would drop
+        every cloud and leave the costmap empty (Nav2 then reports "robot out of
+        bounds of the costmap"). Latest-transform is accurate enough for a slow
+        ground rover and makes costmap publishing robust.
+        """
         tf = self._tf_buffer.lookup_transform(
-            target, source, stamp,
-            timeout=rclpy.duration.Duration(seconds=0.1))
+            target, source, rclpy.time.Time(),
+            timeout=rclpy.duration.Duration(seconds=0.2))
         q = tf.transform.rotation
         t = tf.transform.translation
         return quat_to_rot(q.x, q.y, q.z, q.w), np.array([t.x, t.y, t.z])
