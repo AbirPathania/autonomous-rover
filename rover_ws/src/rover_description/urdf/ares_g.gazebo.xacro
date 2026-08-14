@@ -6,6 +6,9 @@
   Actuation: gazebo_ros diff-drive for the six wheels (motion + /odom) and the
   gazebo_ros joint_pose_trajectory plugin for the four steered kingpins + marker
   arm (commanded by the rover_control steering / marker nodes from /cmd_vel).
+  diff-drive itself obeys /wheel_cmd_vel, not /cmd_vel directly: the
+  kinematics node derives it so skid-steer and kingpin steering never both
+  try to turn the chassis at once (see ares_kinematics_node.py).
 
   Sensors (as-real-as-sim-allows):
     /points               PointCloud2  Livox Mid-360-class 360 x 59 deg LiDAR
@@ -15,9 +18,11 @@
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Motor command topic / odom-TF ownership (mirrors the baseline rover). -->
+  <!-- Motor command topic / odom-TF ownership (mirrors the baseline rover).
+       Default obeys the kinematics-node-derived wheel command, not raw
+       /cmd_vel, so diff-drive and kingpin steering can't double-turn it. -->
   <xacro:arg name="publish_wheel_odom_tf" default="true"/>
-  <xacro:arg name="cmd_vel_topic" default="cmd_vel"/>
+  <xacro:arg name="cmd_vel_topic" default="wheel_cmd_vel"/>
 
   <!-- Camera sensors need a GL/rendering context; disable them for headless
        gzserver on machines without a GPU (Codespaces) to avoid a crash. -->

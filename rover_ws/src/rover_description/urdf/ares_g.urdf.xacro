@@ -310,9 +310,11 @@
   <!-- When true, the diff-drive plugin publishes odom->base_footprint (fine for
        the bare sim); set false when robot_localization owns that TF. -->
   <xacro:arg name="publish_wheel_odom_tf" default="true"/>
-  <!-- Motor command topic the diff-drive plugin obeys (cmd_vel for the bare sim;
-       /motor/cmd_vel when the safety+HW-bridge stack drives the motors). -->
-  <xacro:arg name="cmd_vel_topic" default="cmd_vel"/>
+  <!-- Motor command topic the diff-drive plugin obeys: wheel_cmd_vel (derived
+       by ares_kinematics_node from /cmd_vel, kept mutually exclusive with
+       kingpin steering) for the bare sim; /motor/cmd_vel when the
+       safety+HW-bridge stack drives the motors. -->
+  <xacro:arg name="cmd_vel_topic" default="wheel_cmd_vel"/>
 
   <!-- Materials + Gazebo plugins (drive, steering, sensors) -->
   <xacro:include filename="$(find rover_description)/urdf/ares_g.gazebo.xacro"/>
