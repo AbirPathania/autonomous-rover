@@ -37,7 +37,18 @@ BT::NodeStatus NavigateBase::onStart()
   if (!getGoal(x, y, yaw)) {
     return BT::NodeStatus::FAILURE;
   }
-  if (!client_->wait_for_action_server(std::chrono::seconds(2))) {
+  // 15s, not 2s: mission_server starts ticking its tree immediately, but
+  // Nav2's bt_navigator can easily take longer than 2s to finish its
+  // lifecycle bring-up (more under CPU load, e.g. with the Gazebo/RViz GUI
+  // also running). A too-short wait here doesn't retry -- it fails the whole
+  // follow_waypoint sequence outright, which (a) skips ClearGoalFlag, so
+  // have_goal is stuck true and the real waypoint gets abandoned, and
+  // (b) falls through to ReturnToHome, whose target is ~the spawn pose, so
+  // Nav2 ends up planning a ~zero-length path and never actually finishes --
+  // the rover looks like it's simply not driving at all. Only the first call
+  // per action client actually needs to wait; once matched, later calls
+  // return immediately, so the higher ceiling costs nothing in steady state.
+  if (!client_->wait_for_action_server(std::chrono::seconds(15))) {
     RCLCPP_WARN(node_->get_logger(), "navigate_to_pose action server unavailable");
     return BT::NodeStatus::FAILURE;
   }
