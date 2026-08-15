@@ -112,6 +112,29 @@ int main(int argc, char ** argv)
   exec.add_node(node);
   rclcpp::Rate rate(tick_rate);
 
+  // Nav2's action server names (navigate_to_pose etc.) become graph-discoverable
+  // as soon as their owning lifecycle nodes are merely *configured*, well before
+  // they're *activated* -- wait_for_action_server() alone can't tell the
+  // difference, and a goal sent to a configured-but-not-yet-active server gets
+  // rejected outright rather than queued. In practice Nav2's full lifecycle
+  // bring-up (all 6 servers) has consistently taken ~20-25s in testing, more
+  // under CPU load. Give it a comfortable margin here rather than let the
+  // mission tree hammer real navigation attempts against a server that isn't
+  // ready yet -- observed to cascade into repeated goal rejections and, once
+  // finally accepted, the previous accepted goal's just-aborted state leaving
+  // planner_server briefly unable to route at all.
+  constexpr double kNav2StartupGraceSec = 30.0;
+  RCLCPP_INFO(node->get_logger(),
+    "Mission server up; waiting %.0fs for Nav2 to finish activating before "
+    "the mission tree starts driving...", kNav2StartupGraceSec);
+  {
+    const auto deadline = node->now() + rclcpp::Duration::from_seconds(kNav2StartupGraceSec);
+    rclcpp::Rate grace_rate(tick_rate);
+    while (rclcpp::ok() && node->now() < deadline) {
+      exec.spin_some();
+      grace_rate.sleep();
+    }
+  }
   RCLCPP_INFO(node->get_logger(), "Mission server running (mode=%s).",
     initial_mode.c_str());
 

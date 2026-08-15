@@ -56,6 +56,20 @@ protected:
   bool result_received_{false};
   rclcpp_action::ResultCode result_code_{rclcpp_action::ResultCode::UNKNOWN};
   std::string frame_{"odom"};
+  // If the action server's name is graph-discoverable but its Nav2 BT
+  // executor isn't actually running yet (possible right after Nav2's
+  // lifecycle bring-up, since a LifecycleNode's action server object exists
+  // once configured, before it's activated), a goal sent to it can be
+  // accepted-but-never-processed: goal_response_callback simply never fires.
+  // Track when we sent the goal so onRunning() can fail fast instead of
+  // waiting forever for a response that will never come.
+  rclcpp::Time goal_sent_time_;
+  // Set true the instant goal_response_callback fires, whether or not the
+  // goal was actually accepted -- lets onRunning() tell "rejected" (fail
+  // fast and retry) apart from "no response yet" (genuinely still waiting),
+  // which a bare null check on goal_handle_ can't distinguish.
+  bool response_received_{false};
+  static constexpr double kGoalAcceptTimeoutSec = 15.0;
 };
 
 // Drive to the current waypoint (ports x, y, yaw provided by GetNextWaypoint).

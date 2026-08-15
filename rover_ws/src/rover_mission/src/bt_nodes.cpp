@@ -37,17 +37,6 @@ BT::NodeStatus NavigateBase::onStart()
   if (!getGoal(x, y, yaw)) {
     return BT::NodeStatus::FAILURE;
   }
-  // 15s, not 2s: mission_server starts ticking its tree immediately, but
-  // Nav2's bt_navigator can easily take longer than 2s to finish its
-  // lifecycle bring-up (more under CPU load, e.g. with the Gazebo/RViz GUI
-  // also running). A too-short wait here doesn't retry -- it fails the whole
-  // follow_waypoint sequence outright, which (a) skips ClearGoalFlag, so
-  // have_goal is stuck true and the real waypoint gets abandoned, and
-  // (b) falls through to ReturnToHome, whose target is ~the spawn pose, so
-  // Nav2 ends up planning a ~zero-length path and never actually finishes --
-  // the rover looks like it's simply not driving at all. Only the first call
-  // per action client actually needs to wait; once matched, later calls
-  // return immediately, so the higher ceiling costs nothing in steady state.
   if (!client_->wait_for_action_server(std::chrono::seconds(15))) {
     RCLCPP_WARN(node_->get_logger(), "navigate_to_pose action server unavailable");
     return BT::NodeStatus::FAILURE;
@@ -56,6 +45,7 @@ BT::NodeStatus NavigateBase::onStart()
   result_received_ = false;
   result_code_ = rclcpp_action::ResultCode::UNKNOWN;
   goal_handle_.reset();
+  response_received_ = false;
 
   ActionT::Goal goal;
   goal.pose.header.frame_id = frame_;
@@ -66,12 +56,16 @@ BT::NodeStatus NavigateBase::onStart()
 
   auto options = rclcpp_action::Client<ActionT>::SendGoalOptions();
   options.goal_response_callback =
-    [this](GoalHandle::SharedPtr handle) {goal_handle_ = handle;};
+    [this](GoalHandle::SharedPtr handle) {
+      response_received_ = true;
+      goal_handle_ = handle;
+    };
   options.result_callback =
     [this](const GoalHandle::WrappedResult & result) {
       result_received_ = true;
       result_code_ = result.code;
     };
+  goal_sent_time_ = node_->now();
   client_->async_send_goal(goal, options);
 
   RCLCPP_INFO(node_->get_logger(), "Navigating to (%.2f, %.2f, %.2f rad)", x, y, yaw);
@@ -84,6 +78,26 @@ BT::NodeStatus NavigateBase::onRunning()
     return (result_code_ == rclcpp_action::ResultCode::SUCCEEDED)
            ? BT::NodeStatus::SUCCESS
            : BT::NodeStatus::FAILURE;
+  }
+  if (response_received_ && !goal_handle_) {
+    // Explicitly rejected (most commonly: bt_navigator's action server is
+    // graph-discoverable as soon as it's configured, but it rejects goals
+    // outright until it's actually activated) -- fail immediately so the
+    // tree retries right away instead of idling for the full timeout on a
+    // goal we already know didn't take.
+    RCLCPP_WARN(node_->get_logger(),
+      "navigate_to_pose goal rejected (server likely not fully active yet) "
+      "-- retrying");
+    return BT::NodeStatus::FAILURE;
+  }
+  if (!response_received_) {
+    const double elapsed = (node_->now() - goal_sent_time_).seconds();
+    if (elapsed > kGoalAcceptTimeoutSec) {
+      RCLCPP_WARN(node_->get_logger(),
+        "navigate_to_pose goal got no response at all after %.1fs -- "
+        "failing so the mission tree retries", elapsed);
+      return BT::NodeStatus::FAILURE;
+    }
   }
   return BT::NodeStatus::RUNNING;
 }
