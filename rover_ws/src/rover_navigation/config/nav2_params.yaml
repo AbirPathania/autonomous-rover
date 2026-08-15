@@ -100,9 +100,16 @@ controller_server:
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: true
-      # Tuned for smooth 6-wheel skid-steer motion: forward-only path following
-      # (no reverse weaving), moderate speed, responsive accel, fine yaw sampling.
-      min_vel_x: 0.0
+      # Reverse is allowed (bounded well below the forward limit). It was 0.0
+      # to stop reverse weaving, but forward-only means DWB can never sample a
+      # trajectory that backs out of a dead end and Nav2's BackUp recovery
+      # behaviour is inert -- so the rover strands itself permanently the first
+      # time it drives somewhere it cannot drive forward out of (observed:
+      # nosed up onto the test ramp, then sat at the lip because the far edge
+      # is a genuine 0.30 m drop and the only way out was backwards).
+      # The Oscillation critic still suppresses the weaving this originally
+      # guarded against.
+      min_vel_x: -0.25
       max_vel_x: 0.5
       min_vel_y: 0.0
       max_vel_y: 0.0

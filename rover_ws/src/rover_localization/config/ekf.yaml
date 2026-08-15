@@ -34,23 +34,58 @@ ekf_local:
     # --- Wheel odometry (from the Gazebo diff-drive plugin) ---
     # Trust wheel velocities (vx, vyaw); let the filter integrate pose so we
     # don't fight the SLAM correction on absolute position.
+    # z is enabled here to damp the vertical channel, but be aware it only
+    # helps weakly: the Gazebo diff-drive plugin publishes z with covariance
+    # 1e12 (its way of saying "not measured"), so the filter mostly discounts
+    # it. z therefore still drifts, because nothing observes it and this rover
+    # rests at a persistent ~6 deg pitch, so the filter rotates wheel vx into a
+    # downward component and integrates it (measured ~-0.23 m of phantom
+    # descent per 2 m driven). The real mitigation for the consequences of that
+    # drift lives downstream in terrain_analysis_node, which now weights recent
+    # observations instead of averaging over all time -- see the decay note
+    # there. Pinning z properly would need an odometry source that actually
+    # reports a z covariance, or a levelled chassis.
+    #
+    # vy is fused (not just vx) even though the plugin always reports 0: that
+    # zero IS the non-holonomic constraint. A skid-steer rover cannot translate
+    # sideways, and without that measurement vy is completely unobservable --
+    # nothing else in this filter constrains it, so any lateral velocity error
+    # persists forever and integrates straight into unbounded y drift.
     odom0: /odom
-    odom0_config: [false, false, false,
+    odom0_config: [false, false, true,
                   false, false, false,
-                  true,  false, false,
+                  true,  true,  false,
                   false, false, true,
                   false, false, false]
     odom0_differential: false
     odom0_queue_size: 10
 
     # --- IMU ---
-    # Use gravity-referenced roll/pitch, body angular rates, and planar accel.
+    # Gravity-referenced roll/pitch and body angular rates ONLY -- deliberately
+    # NOT ax/ay.
+    #
+    # Fusing linear acceleration here was catastrophic: with no absolute
+    # position or lateral-velocity measurement anywhere in this filter, an
+    # accelerometer bias (or residual gravity leaking through imperfect
+    # roll/pitch compensation -- this rover's rocker-bogie rests at several
+    # degrees of pitch) integrates once into a velocity the filter never
+    # corrects, then again into position. Measured on a physically STATIONARY
+    # rover: ~1 m of phantom lateral travel in 25 s, growing without bound.
+    # That drift put Nav2's believed pose tens of metres from the rover's real
+    # Gazebo pose, outside the costmap, so the global planner could not produce
+    # a path; Nav2 then fell back on its Spin recovery behaviour, and spinning
+    # added centripetal acceleration that accelerated the very drift that
+    # caused it -- a literal death spiral, and the reason the rover appeared to
+    # sit and rotate instead of driving.
+    #
+    # Wheel odometry already supplies vx/vy/vyaw, which is what a ground robot
+    # needs for dead reckoning; accelerometers add drift and nothing else.
     imu0: /imu
     imu0_config: [false, false, false,
                   true,  true,  false,
                   false, false, false,
                   true,  true,  true,
-                  true,  true,  false]
+                  false, false, false]
     imu0_differential: false
     imu0_queue_size: 10
     imu0_remove_gravitational_acceleration: true

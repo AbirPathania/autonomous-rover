@@ -13,7 +13,11 @@ terrain_analysis_node:
 
     resolution: 0.2            # metres per cell
     size_m: 40.0              # square map side (metres)
-    range_max: 20.0           # ignore LiDAR points beyond this (metres)
+    # 8 m, not 20: elevation from a LiDAR is only as good as the attitude
+    # used to project it, and that error scales with range (1 deg of pitch
+    # is 35 cm of height error at 20 m, but 14 cm at 8 m). Beyond ~8 m the
+    # returns were manufacturing more phantom roughness than real terrain.
+    range_max: 8.0            # ignore LiDAR points beyond this (metres)
     min_points: 3             # a cell is UNKNOWN until it has this many points
 
     # Thresholds calmed so flat ground + the drivable ramp (~11.5 deg) read as
@@ -23,5 +27,10 @@ terrain_analysis_node:
 
     step_warn_m: 0.12         # small rubble/LiDAR noise ignored below this
     step_lethal_m: 0.30       # step too tall to climb safely -> lethal
+
+    # Per-publish relaxation of the min/max height envelope toward each
+    # cell's mean, so a stale bad projection fades instead of scarring the
+    # cell permanently. 0 disables (the old always-accumulate behaviour).
+    envelope_decay: 0.02
 
     publish_rate_hz: 4.0

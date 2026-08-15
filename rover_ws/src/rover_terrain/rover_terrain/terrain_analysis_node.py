@@ -66,6 +66,7 @@ class TerrainAnalysisNode(Node):
         self.declare_parameter('slope_lethal_deg', 28.0)
         self.declare_parameter('step_warn_m', 0.06)
         self.declare_parameter('step_lethal_m', 0.22)
+        self.declare_parameter('envelope_decay', 0.02)
         self.declare_parameter('publish_rate_hz', 4.0)
 
         self.cloud_topic = self.get_parameter('cloud_topic').value
@@ -79,6 +80,7 @@ class TerrainAnalysisNode(Node):
         self.slope_lethal = float(self.get_parameter('slope_lethal_deg').value)
         self.step_warn = float(self.get_parameter('step_warn_m').value)
         self.step_lethal = float(self.get_parameter('step_lethal_m').value)
+        self.envelope_decay = float(self.get_parameter('envelope_decay').value)
         rate = float(self.get_parameter('publish_rate_hz').value)
 
         self.n = int(round(self.size_m / self.res))  # cells per side
@@ -86,7 +88,7 @@ class TerrainAnalysisNode(Node):
 
         # Persistent accumulators (flattened row-major: index = iy * n + ix)
         cells = self.n * self.n
-        self._cnt = np.zeros(cells, dtype=np.int32)
+        self._cnt = np.zeros(cells, dtype=np.float64)
         self._zmin = np.full(cells, np.inf, dtype=np.float64)
         self._zmax = np.full(cells, -np.inf, dtype=np.float64)
         self._zsum = np.zeros(cells, dtype=np.float64)
@@ -245,9 +247,51 @@ class TerrainAnalysisNode(Node):
         return np.clip((value - lo) / (hi - lo), 0.0, 1.0) * 100.0
 
     # ------------------------------------------------------------------ #
+    def _decay_accumulators(self):
+        """Age the elevation grid so it reflects RECENT observations.
+
+        Two separate things decay here, and both matter:
+
+        * the min/max envelope, relaxed toward the cell mean -- otherwise one
+          bad projection widens a cell's zmax-zmin spread for the rest of the
+          run, and once that spread crosses step_lethal the cell is scarred
+          impassable forever.
+
+        * the mean itself. zsum and cnt are scaled together, which leaves the
+          mean value untouched but shrinks its weight, turning a cumulative
+          average into an exponentially-weighted one. This is the important
+          one for slope: odometry z is unobservable here (the Gazebo diff-drive
+          plugin publishes z with covariance 1e12, i.e. "not measured", so the
+          EKF cannot pin it) and therefore drifts. A cumulative mean bakes each
+          cell's own slice of that drift history in permanently, so
+          neighbouring cells settle at different offsets and the central
+          difference between them reports slope that simply is not there --
+          enough to push flat, open ground past slope_lethal and wall the rover
+          in. Weighting recent observations dominant means neighbouring cells
+          share very nearly the same drift offset, which cancels in the
+          difference.
+
+        Cells that stop being observed decay below min_points and revert to
+        UNKNOWN rather than lingering as stale truth; Nav2 plans through
+        unknown space (allow_unknown), so forgetting is safer than remembering
+        wrongly.
+        """
+        a = self.envelope_decay
+        if a <= 0.0:
+            return
+        known = self._cnt > 0
+        if np.any(known):
+            mean = self._zsum[known] / self._cnt[known]
+            self._zmin[known] += (mean - self._zmin[known]) * a
+            self._zmax[known] -= (self._zmax[known] - mean) * a
+        keep = 1.0 - a
+        self._zsum *= keep
+        self._cnt *= keep
+
     def _publish(self):
         if self._origin is None or not np.any(self._cnt):
             return
+        self._decay_accumulators()
         cost, slope_deg, roughness, valid = self._compute_grids()
 
         cost_data = np.where(valid, np.round(cost), -1).astype(np.int8)

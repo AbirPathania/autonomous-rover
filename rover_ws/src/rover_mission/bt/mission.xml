@@ -41,11 +41,34 @@
           <LaunchDrone/>
         </Fallback>
 
+        <!-- ForceSuccess is load-bearing: it makes a FAILED navigation
+             attempt look like SUCCESS to this Fallback, so the Fallback does
+             NOT drop through to ReturnToHome. Without it the two branches
+             fight: any transient nav failure (planner hiccup, a goal aborted
+             while the costmap catches up) sent the rover home, that home goal
+             preempted the waypoint goal, the next tick re-sent the waypoint
+             goal which preempted the home goal, and so on; goals were
+             cancelling each other every few seconds and none ever ran to
+             completion, so the rover sat still while the logs happily
+             reported it was navigating.
+
+             ClearGoalFlag sits INSIDE the guarded sequence deliberately: it
+             only runs when the navigation actually succeeded, so a failed
+             attempt leaves have_goal set and the same waypoint is retried on
+             the next tick rather than being silently skipped.
+
+             ReturnToHome is now reachable only via GetNextWaypoint returning
+             FAILURE, i.e. the waypoint queue is genuinely exhausted, which
+             is what "return home" was always meant to mean. -->
         <Fallback name="drive">
           <Sequence name="follow_waypoint">
             <GetNextWaypoint x="{gx}" y="{gy}" yaw="{gyaw}"/>
-            <NavigateToPose x="{gx}" y="{gy}" yaw="{gyaw}"/>
-            <ClearGoalFlag/>
+            <ForceSuccess>
+              <Sequence name="navigate_then_advance">
+                <NavigateToPose x="{gx}" y="{gy}" yaw="{gyaw}"/>
+                <ClearGoalFlag/>
+              </Sequence>
+            </ForceSuccess>
           </Sequence>
           <ReturnToHome/>
         </Fallback>
