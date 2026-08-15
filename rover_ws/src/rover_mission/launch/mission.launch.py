@@ -21,11 +21,16 @@ def generate_launch_description():
     default_params = os.path.join(pkg_share, 'config', 'mission.yaml')
     default_bt = os.path.join(pkg_share, 'bt', 'mission.xml')
 
-    params_file = LaunchConfiguration('params_file')
+    # Named mission_params_file (not params_file) to avoid colliding with
+    # rover_navigation's own params_file argument when both are included
+    # together (e.g. via rover_bringup autonomy.launch.py) -- LaunchConfiguration
+    # names are global across a launch tree, so two same-named
+    # DeclareLaunchArgument calls collide and one silently loses its file.
+    mission_params_file = LaunchConfiguration('mission_params_file')
     bt_xml = LaunchConfiguration('bt_xml')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
-    params_arg = DeclareLaunchArgument('params_file', default_value=default_params)
+    params_arg = DeclareLaunchArgument('mission_params_file', default_value=default_params)
     bt_arg = DeclareLaunchArgument('bt_xml', default_value=default_bt)
     sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value='true')
 
@@ -34,7 +39,7 @@ def generate_launch_description():
         executable='mission_server',
         name='mission_server',
         output='screen',
-        parameters=[params_file, {'use_sim_time': use_sim_time, 'bt_xml': bt_xml}],
+        parameters=[mission_params_file, {'use_sim_time': use_sim_time, 'bt_xml': bt_xml}],
     )
 
     return LaunchDescription([

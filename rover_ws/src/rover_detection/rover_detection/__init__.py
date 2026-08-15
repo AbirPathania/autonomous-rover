@@ -2,6 +2,7 @@
 import math
 
 import numpy as np
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
 
 class BuriedThreat:
@@ -25,13 +26,19 @@ def load_threats(node):
     Parameters (all same length): threat_x, threat_y, threat_depth,
     threat_metal, threat_voc, threat_size (doubles) and threat_type (strings).
     """
-    node.declare_parameter('threat_x', [])
-    node.declare_parameter('threat_y', [])
-    node.declare_parameter('threat_depth', [])
-    node.declare_parameter('threat_metal', [])
-    node.declare_parameter('threat_voc', [])
-    node.declare_parameter('threat_size', [])
-    node.declare_parameter('threat_type', [])
+    # Explicit-type descriptors, no default value: declaring an empty list
+    # ([]) as the default is ambiguous (rclpy infers it as BYTE_ARRAY), which
+    # then conflicts with the actual DOUBLE_ARRAY/STRING_ARRAY values loaded
+    # from detection.yaml and throws InvalidParameterTypeException.
+    double_array = ParameterDescriptor(type=ParameterType.PARAMETER_DOUBLE_ARRAY)
+    string_array = ParameterDescriptor(type=ParameterType.PARAMETER_STRING_ARRAY)
+    node.declare_parameter('threat_x', descriptor=double_array)
+    node.declare_parameter('threat_y', descriptor=double_array)
+    node.declare_parameter('threat_depth', descriptor=double_array)
+    node.declare_parameter('threat_metal', descriptor=double_array)
+    node.declare_parameter('threat_voc', descriptor=double_array)
+    node.declare_parameter('threat_size', descriptor=double_array)
+    node.declare_parameter('threat_type', descriptor=string_array)
 
     xs = list(node.get_parameter('threat_x').value or [])
     ys = list(node.get_parameter('threat_y').value or [])

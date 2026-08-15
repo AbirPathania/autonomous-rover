@@ -25,8 +25,8 @@ sensor_sim_node:
     noise_voc: 0.03
     threat_x:    [4.0,  6.5,  5.0]
     threat_y:    [-1.0, 1.0,  2.0]
-    threat_depth:[0.15, 0.25, 0.10]
-    threat_metal:[0.9,  0.1,  0.2]
+    threat_depth: [0.15, 0.25, 0.10]
+    threat_metal: [0.9,  0.1,  0.2]
     threat_voc:  [0.1,  0.9,  0.05]
     threat_size: [0.15, 0.12, 0.20]
     threat_type: ["metal_object", "chemical", "buried_object"]
@@ -69,8 +69,8 @@ detection_eval_node:
     # Same ground truth as the simulator (for scoring only).
     threat_x:    [4.0,  6.5,  5.0]
     threat_y:    [-1.0, 1.0,  2.0]
-    threat_depth:[0.15, 0.25, 0.10]
-    threat_metal:[0.9,  0.1,  0.2]
+    threat_depth: [0.15, 0.25, 0.10]
+    threat_metal: [0.9,  0.1,  0.2]
     threat_voc:  [0.1,  0.9,  0.05]
     threat_size: [0.15, 0.12, 0.20]
     threat_type: ["metal_object", "chemical", "buried_object"]
